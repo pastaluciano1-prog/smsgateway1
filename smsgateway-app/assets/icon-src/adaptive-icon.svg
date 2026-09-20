@@ -1,0 +1,16 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Transparent background; Android tints it with adaptiveIcon.backgroundColor.
+       Glyph scaled/centered to sit inside the adaptive-icon safe zone. -->
+  <g transform="translate(512 512) scale(0.8) translate(-512 -544)">
+    <path d="M256 264
+             h512 a72 72 0 0 1 72 72
+             v288 a72 72 0 0 1 -72 72
+             h-300 l-140 128 v-128 h-72
+             a72 72 0 0 1 -72 -72
+             v-288 a72 72 0 0 1 72 -72 z"
+          fill="#ffffff"/>
+    <path d="M628 372 L392 506 L486 540 L520 636 L560 556 L636 380 Z"
+          fill="#4f46e5"/>
+    <path d="M636 380 L520 636 L486 540 Z" fill="#3730a3"/>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+pb_data
+pocketbase.exe
+pocketbase
+*.zip
+Dockerfile
+.dockerignore

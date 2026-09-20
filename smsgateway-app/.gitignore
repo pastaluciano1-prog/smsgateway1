@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+android/
+ios/
+npm-debug.*
+*.orig.*
+.DS_Store
+
+# Release signing — keep private, never commit
+release.keystore
+*.keystore

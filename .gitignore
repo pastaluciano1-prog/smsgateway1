@@ -1,0 +1,12 @@
+# Secrets / local config
+.env
+.env.local
+
+# PocketBase runtime data + local binary
+pocketbase/pb_data/
+pocketbase/pocketbase
+pocketbase/pocketbase.exe
+pocketbase/*.zip
+
+# Node
+node_modules/

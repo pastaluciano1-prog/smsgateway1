@@ -1,0 +1,42 @@
+# One-command deploy for the SMS Gateway backend + panel.
+#
+#   cp .env.example .env   # then edit the values
+#   docker compose up -d --build
+#
+# Panel:      http://localhost:3000
+# PocketBase: http://localhost:8090  (admin UI at /_/)
+
+services:
+  pocketbase:
+    build:
+      context: ./pocketbase
+    environment:
+      POCKETBASE_ADMIN_EMAIL: ${POCKETBASE_ADMIN_EMAIL}
+      POCKETBASE_ADMIN_PASSWORD: ${POCKETBASE_ADMIN_PASSWORD}
+    volumes:
+      - pb_data:/pb/pb_data
+    ports:
+      - "8090:8090"
+    restart: unless-stopped
+
+  panel:
+    build:
+      context: ./smsgateway-panel
+      args:
+        # Baked into the browser bundle — must be the PUBLIC PocketBase URL
+        # that end users' browsers can reach.
+        NEXT_PUBLIC_PB_URL: ${NEXT_PUBLIC_PB_URL}
+    environment:
+      NEXT_PUBLIC_PB_URL: ${NEXT_PUBLIC_PB_URL}
+      # The panel server reaches PocketBase over the compose network.
+      POCKETBASE_INTERNAL_URL: http://pocketbase:8090
+      POCKETBASE_ADMIN_EMAIL: ${POCKETBASE_ADMIN_EMAIL}
+      POCKETBASE_ADMIN_PASSWORD: ${POCKETBASE_ADMIN_PASSWORD}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - pocketbase
+    restart: unless-stopped
+
+volumes:
+  pb_data:
