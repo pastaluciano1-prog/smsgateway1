@@ -2,7 +2,7 @@
 .env
 .env.local
 
-# PocketBase runtime data + local binary
+# PocketBase runtime data + local binary (schema lives in pb_migrations/)
 pocketbase/pb_data/
 pocketbase/pocketbase
 pocketbase/pocketbase.exe
@@ -10,3 +10,6 @@ pocketbase/*.zip
 
 # Node
 node_modules/
+
+# Build artifacts (distribute via GitHub Releases, not the repo)
+*.apk
