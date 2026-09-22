@@ -1,0 +1,11 @@
+{
+  "host": "http://localhost:3000",
+  "message": "Hello! This is a test message from the SMS gateway.",
+  "rate_per_phone_per_minute": 20,
+  "randomize": true,
+  "phones": [
+    { "name": "Phone 1", "api_key": "PASTE_API_KEY_FOR_PHONE_1" },
+    { "name": "Phone 2", "api_key": "PASTE_API_KEY_FOR_PHONE_2" },
+    { "name": "Phone 3", "api_key": "PASTE_API_KEY_FOR_PHONE_3" }
+  ]
+}

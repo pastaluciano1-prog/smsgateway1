@@ -13,3 +13,7 @@ node_modules/
 
 # Build artifacts (distribute via GitHub Releases, not the repo)
 *.apk
+
+# Script secrets / data (keep the *.example.* templates)
+scripts/config.json
+scripts/numbers.txt

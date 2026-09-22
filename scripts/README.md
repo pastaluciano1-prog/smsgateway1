@@ -1,53 +1,79 @@
-# Automation scripts
+# Bulk SMS sender (terminal)
 
-Send SMS through your gateway from the command line / cron, using the panel's
-`POST /send` API. No third-party packages — just Python 3.
+Send SMS from the command line — no server, no dependencies, just Python 3.
+You keep two files next to `send.py`:
+
+- **`config.json`** — your phones, message, and rate
+- **`numbers.txt`** — the recipients, one per line
 
 ## Setup
 
-1. In the panel → **API Keys & Devices**, create a key and copy it.
-2. Make sure a phone is connected to that key and has at least one device/SIM.
-3. Note your panel URL (the public one, e.g. `https://panel.example.com`).
+1. Run the panel/backend somewhere the script can reach (`host` below).
+2. For **each phone** you've connected, copy its **API key** from the panel's
+   *API Keys & Devices* page. One phone = one API key.
+3. Copy `config.example.json` → `config.json` and fill it in:
 
-## Send the same message to a list
-
-`numbers.txt` — one number per line (see `numbers.example.txt`):
-
-```bash
-python send_bulk.py \
-  --host https://panel.example.com \
-  --key  YOUR_API_KEY \
-  --file numbers.txt \
-  --message "Hello from the SMS gateway!"
+```json
+{
+  "host": "http://localhost:3000",
+  "message": "Hello! This is a test message.",
+  "rate_per_phone_per_minute": 20,
+  "randomize": true,
+  "phones": [
+    { "name": "Phone 1", "api_key": "key_for_phone_1" },
+    { "name": "Phone 2", "api_key": "key_for_phone_2" },
+    { "name": "Phone 3", "api_key": "key_for_phone_3" }
+  ]
+}
 ```
 
-## Send a personalized message per number
+| Field | Meaning |
+| ----- | ------- |
+| `host` | Where the backend is reachable (e.g. `https://panel.example.com`). |
+| `message` | The text sent to every number. |
+| `rate_per_phone_per_minute` | Max messages **per phone** per minute. With 3 phones at 20 → ~60/min total. |
+| `randomize` | Shuffle recipients + jitter timing so it's not robotic. |
+| `phones[]` | One entry per phone. `api_key` is required. Add `"sim": <id>` only if a phone has multiple SIMs and you want a specific one. |
 
-`messages.csv` — each line is `number,message` (see `messages.example.csv`):
+4. Put your recipients in `numbers.txt`, one per line:
 
-```bash
-python send_bulk.py --host ... --key ... --file messages.csv --csv
+```
++15551234567
+5559876543
+447700900123
 ```
 
-## Options
+Numbers **without** a `+` get one added automatically; numbers that already
+have `+` are left alone. Spaces, dashes and parentheses are stripped. (Include
+the country code — a bare local number just gets a `+` in front.)
 
-| Flag         | Meaning                                                        |
-| ------------ | ------------------------------------------------------------- |
-| `--sim N`    | Send from a specific SIM (subscription id or slot as shown in the panel). Omit to use the first device. |
-| `--chunk N`  | Recipients per request in bulk mode (default 100).            |
-| `--delay S`  | Seconds to wait between requests (throttle to respect a SIM's rate limit). |
-| `--dry-run`  | Parse and print what would be sent, without sending.          |
+## Run
 
-Messages are **queued on the server**; the connected phone sends them on its
-next poll. Check status (sent/failed) in the panel's **Messages** page.
+```bash
+python send.py            # reads config.json + numbers.txt from this folder
+python send.py --dry-run  # show the plan and distribution, send nothing
+```
 
-## Notes
+The script splits the numbers evenly across your phones and paces each phone at
+`rate_per_phone_per_minute`, so all phones send in parallel. Messages are queued
+on the server; each phone sends its share on its next poll. Watch progress in
+the terminal, and see sent/failed in the panel's **Messages** page.
 
-- The API key is a bearer credential — keep it secret. Prefer passing it via an
-  environment variable in scripts/cron rather than hardcoding:
-  ```bash
-  python send_bulk.py --host "$PANEL_URL" --key "$SMS_API_KEY" --file numbers.txt --message "..."
-  ```
-- Per-SIM rate limits set in the panel are enforced when the phone pulls
-  messages, so it's safe to queue a large batch at once — they'll go out at the
-  allowed rate.
+### How the rate works
+
+- 5 phones × 20/min = up to 100 messages/minute.
+- The script paces the **queuing**. If you also set a per-SIM rate limit in the
+  panel, that acts as a hard cap on the phone side — you can leave it blank and
+  let the script control the rate.
+
+## Options / files
+
+- `--config path` / `--numbers path` — use files elsewhere.
+- `config.json` and `numbers.txt` are gitignored (they hold your keys and
+  recipient lists); the `*.example.*` files are the templates.
+
+---
+
+`send_bulk.py` is an alternative that takes everything as command-line flags
+(`--host --key --file --message`) instead of a config file — handy for one-off
+sends or cron. See its `--help`.
