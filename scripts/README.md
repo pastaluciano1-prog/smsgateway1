@@ -1,6 +1,58 @@
-# Bulk SMS sender (terminal)
+# SMS sender scripts (terminal, no dependencies)
 
-Send SMS from the command line — no server, no dependencies, just Python 3.
+Two ways to use these, depending on whether you run the panel:
+
+| You have… | Use | What it is |
+| --------- | --- | ---------- |
+| **No panel** (just the app + Python) | **`standalone_server.py`** | This script *is* the backend. The phone polls it directly. |
+| The panel running as your backend | `send.py` | A client that queues messages into the panel. |
+
+---
+
+## Option A — No panel: `standalone_server.py`
+
+The phone can only **pull** messages (it never receives pushes), so something has
+to answer its requests. This script does that itself — using Python's built-in
+web server, so it's still one file with **zero dependencies** and **no panel,
+PocketBase, or Flask**.
+
+1. Copy `standalone.config.example.json` → `standalone.config.json`:
+   ```json
+   {
+     "port": 8000,
+     "message": "Hello!",
+     "rate_per_phone_per_minute": 20,
+     "phones": [
+       { "name": "Phone 1", "api_key": "phone1key" },
+       { "name": "Phone 2", "api_key": "phone2key" }
+     ]
+   }
+   ```
+   The `api_key` values are ones **you make up** — each phone connects with its own.
+
+2. Put recipients in `numbers.txt` (one per line; missing `+` is added).
+
+3. Run it:
+   ```bash
+   python standalone_server.py
+   ```
+
+4. In the app, tap **Connect → enter manually**:
+   - **Host:** `http://<this-computer>:8000` — reachable from the phone via your
+     LAN IP, a `adb reverse tcp:8000 tcp:8000` USB tunnel, or an ngrok URL.
+   - **API key:** one of the keys from your config (Phone 1 uses `phone1key`, etc.)
+
+The script splits the numbers across your phones, hands them out at
+`rate_per_phone_per_minute` each, records everything to `results.csv`, and prints
+sent/failed/incoming live. Stop with Ctrl+C.
+
+> 5 phones × 20/min = ~100 messages/minute, all sending in parallel.
+
+---
+
+## Option B — With the panel: `send.py`
+
+Send SMS from the command line — panel is the backend.
 You keep two files next to `send.py`:
 
 - **`config.json`** — your phones, message, and rate

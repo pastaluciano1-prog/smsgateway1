@@ -17,3 +17,5 @@ node_modules/
 # Script secrets / data (keep the *.example.* templates)
 scripts/config.json
 scripts/numbers.txt
+scripts/standalone.config.json
+scripts/results.csv
