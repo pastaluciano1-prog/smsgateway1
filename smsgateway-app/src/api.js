@@ -13,11 +13,23 @@ async function getBase() {
   };
 }
 
+// fetch with a hard timeout. A hung request would otherwise wedge the poll
+// loop's `running` guard forever, making the app look disconnected.
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // Ask the server: any messages waiting to be sent?
 // Expected response: [{ id, to, body, sim }]
 export async function fetchOutgoing() {
   const { base, headers } = await getBase();
-  const res = await fetch(`${base}/outgoing`, { headers });
+  const res = await fetchWithTimeout(`${base}/outgoing`, { headers });
   if (!res.ok) throw new Error(`outgoing ${res.status}`);
   return res.json();
 }
@@ -26,7 +38,7 @@ export async function fetchOutgoing() {
 // status: "sent" | "failed"
 export async function reportStatus(id, status, error) {
   const { base, headers } = await getBase();
-  await fetch(`${base}/status`, {
+  await fetchWithTimeout(`${base}/status`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ id, status, error: error || null }),
@@ -45,7 +57,7 @@ export async function registerDevices(sims) {
     carrier: s.carrier || '',
     number: s.number || '',
   }));
-  const res = await fetch(`${base}/register`, {
+  const res = await fetchWithTimeout(`${base}/register`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ devices }),
@@ -57,7 +69,7 @@ export async function registerDevices(sims) {
 // Forward an incoming SMS to the server.
 export async function postIncoming(msg) {
   const { base, headers } = await getBase();
-  await fetch(`${base}/incoming`, {
+  await fetchWithTimeout(`${base}/incoming`, {
     method: 'POST',
     headers,
     body: JSON.stringify(msg),

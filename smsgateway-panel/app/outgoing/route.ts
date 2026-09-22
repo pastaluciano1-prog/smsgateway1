@@ -5,6 +5,9 @@ import type { DeviceRecord, MessageRecord } from "@/types/pb";
 export const dynamic = "force-dynamic";
 
 const MAX_BATCH = 100;
+// A message claimed as "sending" but not reported within this window is
+// considered stuck and re-queued to "pending" on the next poll.
+const SENDING_TIMEOUT_MS = 3 * 60 * 1000;
 
 // PocketBase stores/compares datetimes as "YYYY-MM-DD HH:MM:SS.sssZ".
 function pbDate(d: Date) {
@@ -35,6 +38,19 @@ export async function GET(req: Request) {
     );
 
     if (devices.length === 0) return Response.json([]);
+
+    // Recover stuck "sending" messages: claimed by a previous poll but never
+    // reported (app killed / lost network mid-send). After a grace period put
+    // them back to "pending" so they get retried instead of hanging forever.
+    const staleStr = pbDate(new Date(now.getTime() - SENDING_TIMEOUT_MS));
+    const stale = await pb.collection("messages").getFullList<MessageRecord>({
+      filter: `device.api_key = "${apiKey.id}" && status = "sending" && updated <= "${staleStr}"`,
+    });
+    await Promise.allSettled(
+      stale.map((m) =>
+        pb.collection("messages").update(m.id, { status: "pending" })
+      )
+    );
 
     // Promote any scheduled messages that are now due.
     const due = await pb.collection("messages").getFullList<MessageRecord>({

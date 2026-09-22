@@ -9,6 +9,7 @@ export default function HomeScreen({ onDisconnect }) {
   const [config, setConfig] = useState({ host: '', apiKey: '' });
   const [counters, setCounters] = useState({ sent: 0, received: 0, failed: 0 });
   const [sims, setSims] = useState([]);
+  const [batteryOk, setBatteryOk] = useState(true);
 
   async function refresh() {
     setConfig(await loadConfig());
@@ -19,10 +20,16 @@ export default function HomeScreen({ onDisconnect }) {
     try {
       // Request both: READ_PHONE_STATE (to read SIM info) and SEND_SMS
       // (to actually send). Both are runtime permissions on Android 6+.
-      const result = await PermissionsAndroid.requestMultiple([
+      const perms = [
         PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
         PermissionsAndroid.PERMISSIONS.SEND_SMS,
-      ]);
+      ];
+      // Notification permission (Android 13+) so the foreground-service
+      // notification can show.
+      if (PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS) {
+        perms.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
+      const result = await PermissionsAndroid.requestMultiple(perms);
       const GRANTED = PermissionsAndroid.RESULTS.GRANTED;
 
       if (result[PermissionsAndroid.PERMISSIONS.SEND_SMS] !== GRANTED) {
@@ -45,9 +52,21 @@ export default function HomeScreen({ onDisconnect }) {
     } catch (e) { }
   }
 
+  function setupBackground() {
+    // Keep the poll loop alive with the screen off, and nudge the user to
+    // exempt the app from battery optimization.
+    try { SmsGateway.startService(); } catch (e) { }
+    try {
+      const ok = SmsGateway.isIgnoringBatteryOptimizations();
+      setBatteryOk(ok);
+      if (!ok) SmsGateway.requestIgnoreBatteryOptimizations();
+    } catch (e) { }
+  }
+
   useEffect(() => {
     refresh();
     loadSims();
+    setupBackground();
     // Start polling the server; refresh counters whenever something sends
     startPolling(5000, refresh);
     return () => stopPolling();  // stop when leaving the screen
@@ -62,7 +81,13 @@ export default function HomeScreen({ onDisconnect }) {
   function handleDisconnect() {
     Alert.alert('Disconnect?', 'You will need to scan the QR again to reconnect.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Disconnect', style: 'destructive', onPress: async () => { await clearConfig(); onDisconnect(); } },
+      {
+        text: 'Disconnect', style: 'destructive', onPress: async () => {
+          try { SmsGateway.stopService(); } catch (e) { }
+          await clearConfig();
+          onDisconnect();
+        },
+      },
     ]);
   }
 
@@ -108,6 +133,25 @@ export default function HomeScreen({ onDisconnect }) {
               </View>
             </View>
           ))
+        )}
+
+        {/* Background reliability */}
+        {!batteryOk && (
+          <TouchableOpacity
+            style={styles.warnCard}
+            onPress={() => {
+              try { SmsGateway.requestIgnoreBatteryOptimizations(); } catch (e) { }
+              setTimeout(() => {
+                try { setBatteryOk(SmsGateway.isIgnoringBatteryOptimizations()); } catch (e) { }
+              }, 800);
+            }}
+          >
+            <Text style={styles.warnTitle}>⚠ Allow background running</Text>
+            <Text style={styles.warnText}>
+              Disable battery optimization so messages keep sending when the
+              screen is off. Tap to fix.
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Settings */}
@@ -163,6 +207,9 @@ const styles = StyleSheet.create({
   link: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
 
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 18, ...CARD_SHADOW },
+  warnCard: { backgroundColor: '#fffbeb', borderRadius: 16, padding: 16, marginTop: 20, borderWidth: 1, borderColor: '#fde68a' },
+  warnTitle: { color: '#b45309', fontWeight: '700', fontSize: 15, marginBottom: 4 },
+  warnText: { color: '#92714a', fontSize: 13, lineHeight: 18 },
   simCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, ...CARD_SHADOW },
   simBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   simBadgeText: { color: '#2563eb', fontWeight: '800', fontSize: 16 },

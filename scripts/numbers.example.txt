@@ -1,0 +1,5 @@
+# One phone number per line. Lines starting with # are ignored.
+# Use full international format where possible.
++15551234567
++15559876543
++447700900123

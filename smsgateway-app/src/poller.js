@@ -10,7 +10,9 @@ async function handleMessage(msg) {
   try {
     // msg.sim is a subscriptionId; use -1 (default SIM) if not provided
     const subId = typeof msg.sim === 'number' ? msg.sim : -1;
-    SmsGateway.sendSms(msg.to, msg.body, subId);
+    // Now async: resolves only once the platform confirms the send, and
+    // rejects on real failures (no credit, no service, radio off).
+    await SmsGateway.sendSms(msg.to, msg.body, subId);
     await bumpCounter('sent');
     await reportStatus(msg.id, 'sent');
   } catch (e) {
