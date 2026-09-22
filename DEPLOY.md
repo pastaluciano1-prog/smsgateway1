@@ -1,71 +1,89 @@
 # Deploying the SMS Gateway
 
-Two services: **PocketBase** (database + auth) and the **Next.js panel** (UI +
-the API the phone polls). Both ship as Docker images.
+There are two shapes. Most people want the first.
 
-## Option A — Docker Compose (any VPS: DigitalOcean droplet, Hetzner, etc.)
+---
 
-1. Clone the repo onto the host.
-2. Configure env:
-   ```bash
-   cp .env.example .env
-   # edit .env — set a strong POCKETBASE_ADMIN_PASSWORD, and set
-   # NEXT_PUBLIC_PB_URL to the PUBLIC URL your users' browsers use for PocketBase.
-   ```
-3. Bring it up:
-   ```bash
-   docker compose up -d --build
-   ```
+## Option 1 — One container (recommended, "host and boom")
 
-- Panel → `http://<host>:3000`
-- PocketBase → `http://<host>:8090` (admin UI at `/_/`)
-- Collections are created automatically on first boot (from `pocketbase/pb_migrations/`).
-- The superuser is created from your env vars on first boot.
+The root `Dockerfile` bundles **PocketBase + the panel in a single image**. The
+panel proxies PocketBase at `/pb`, so there's only **one service and one public
+URL**. The superuser and database tables are created automatically on first boot.
 
-**Data** lives in the `pb_data` Docker volume — back that up.
+### Railway
 
-### Production notes
-- Put a reverse proxy (Caddy/Nginx/Traefik) in front for HTTPS. Point one domain
-  at the panel (`:3000`) and one at PocketBase (`:8090`), e.g.
-  `panel.example.com` and `pb.example.com`.
-- Set `NEXT_PUBLIC_PB_URL=https://pb.example.com` **before building** (it is baked
-  into the browser bundle). Changing it later requires a rebuild:
-  `docker compose up -d --build panel`.
-- The phone connects to the **panel** URL (from the QR), not PocketBase.
-- PocketBase allows all CORS origins by default, so the panel domain can talk to
-  the PocketBase domain from the browser.
+1. **New Project → Deploy from GitHub repo**, pick this repo.
+2. In the service's **Settings**:
+   - **Root Directory:** `/` (the repo root — it uses the root `Dockerfile`).
+   - **Add a Volume**, mount path **`/pb/pb_data`** (this is your database; it's
+     the only thing that must persist).
+3. In **Variables**, add just two:
+   - `POCKETBASE_ADMIN_EMAIL` = your admin email
+   - `POCKETBASE_ADMIN_PASSWORD` = a strong password
+4. Deploy. That's it.
 
-## Option B — Railway
+On first boot the container creates the superuser, applies the migrations
+(creating all tables), and starts the panel. Open the service URL, register,
+create an API key, and connect your phone.
 
-Create **two services** from this repo:
+> You do **not** need to set `NEXT_PUBLIC_PB_URL` — it defaults to `/pb` (the
+> panel proxies PocketBase for the browser). Railway injects `PORT` automatically.
 
-1. **PocketBase service**
-   - Root directory: `pocketbase`
-   - It builds from `pocketbase/Dockerfile`.
-   - Add a **volume** mounted at `/pb/pb_data`.
-   - Variables: `POCKETBASE_ADMIN_EMAIL`, `POCKETBASE_ADMIN_PASSWORD`.
-   - Note its public URL (e.g. `https://pocketbase-production.up.railway.app`).
+**PocketBase admin UI** is reachable at `https://<your-app>/pb/_/` with the same
+admin email/password.
 
-2. **Panel service**
-   - Root directory: `smsgateway-panel`
-   - It builds from `smsgateway-panel/Dockerfile`.
-   - Build arg **and** variable `NEXT_PUBLIC_PB_URL` = the PocketBase public URL.
-   - Variables: `POCKETBASE_INTERNAL_URL` = PocketBase private URL (or reuse the
-     public one), `POCKETBASE_ADMIN_EMAIL`, `POCKETBASE_ADMIN_PASSWORD`.
+### Render / Fly / any single Docker host
 
-Railway injects `PORT`; the panel image already honors it.
+Same idea — one service from the root `Dockerfile`:
+
+```bash
+docker build -t sms-gateway .
+docker run -d -p 3000:3000 \
+  -e POCKETBASE_ADMIN_EMAIL=admin@example.com \
+  -e POCKETBASE_ADMIN_PASSWORD='a-strong-password' \
+  -v sms_pb_data:/pb/pb_data \
+  sms-gateway
+```
+
+Panel + admin UI on port 3000 (`/` and `/pb/_/`).
+
+---
+
+## Option 2 — Two services (split PocketBase + panel)
+
+Use this if you want PocketBase and the panel scaled/hosted separately. It's the
+`docker-compose.yml` at the repo root:
+
+```bash
+cp .env.example .env      # set POCKETBASE_ADMIN_PASSWORD, and NEXT_PUBLIC_PB_URL
+docker compose up -d --build
+```
+
+- Panel → `:3000`, PocketBase → `:8090` (admin at `/_/`).
+- Here the browser talks to PocketBase **directly**, so `NEXT_PUBLIC_PB_URL`
+  must be PocketBase's public URL (set it before building; it's baked into the
+  browser bundle).
+- On Railway this means two services and a volume on the PocketBase one — which
+  is exactly the manual fiddling Option 1 avoids.
+
+---
 
 ## Environment reference
 
-| Variable                     | Service | Purpose                                                        |
-| ---------------------------- | ------- | -------------------------------------------------------------- |
-| `NEXT_PUBLIC_PB_URL`         | panel   | Public PocketBase URL, baked into the browser bundle at build. |
-| `POCKETBASE_INTERNAL_URL`    | panel   | PocketBase URL the panel server uses (defaults to the public). |
-| `POCKETBASE_ADMIN_EMAIL`     | both    | Superuser email.                                               |
-| `POCKETBASE_ADMIN_PASSWORD`  | both    | Superuser password.                                            |
+| Variable | Needed | Purpose |
+| -------- | ------ | ------- |
+| `POCKETBASE_ADMIN_EMAIL` | always | Superuser, created automatically on boot. |
+| `POCKETBASE_ADMIN_PASSWORD` | always | Superuser password. |
+| `NEXT_PUBLIC_PB_URL` | Option 2 only | Public PocketBase URL for the browser (Option 1 defaults it to `/pb`). |
+| `POCKETBASE_INTERNAL_URL` | auto | Where the panel server reaches PocketBase (Option 1 sets `http://127.0.0.1:8090`). |
+| `PORT` | auto | Injected by the host; the panel listens on it. |
 
 ## After deploying
 
-1. Open the panel, register an account, create an API key.
-2. Generate the QR (its Panel URL should be your public panel URL).
-3. Scan it in the Android app, grant SMS + phone permissions — done.
+1. Open the panel URL, register, create an API key, **Generate QR**.
+2. Scan it in the app (the QR's Panel URL should be your deployed URL).
+3. Grant SMS + phone permissions, allow background running. Done.
+
+The **data** lives in the volume at `/pb/pb_data` — back that up. The schema
+itself is code (`pocketbase/pb_migrations/`) and rebuilds automatically, so a
+fresh deploy always self-provisions its tables.

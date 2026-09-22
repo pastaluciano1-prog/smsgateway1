@@ -66,12 +66,14 @@ Or run them without Docker: start `pocketbase serve` in `pocketbase/`, then
 
 ## Deploying
 
-See [`DEPLOY.md`](DEPLOY.md) for Docker Compose (any VPS), Railway, and
-DigitalOcean instructions, plus the full environment-variable reference.
+**One-click (recommended):** the root `Dockerfile` bundles PocketBase + the panel
+into a single container (the panel proxies PocketBase at `/pb`). On Railway:
+deploy the repo, add a volume at `/pb/pb_data`, set `POCKETBASE_ADMIN_EMAIL` +
+`POCKETBASE_ADMIN_PASSWORD`, and deploy — the superuser and tables are created
+automatically. One service, one URL.
 
-The short version: expose the **panel** and **PocketBase** publicly (ideally
-behind HTTPS), set `NEXT_PUBLIC_PB_URL` to the public PocketBase URL at build
-time, and point the QR at the public panel URL.
+See [`DEPLOY.md`](DEPLOY.md) for that plus the split two-service setup
+(`docker-compose.yml`) and the full environment-variable reference.
 
 ## The phone API (bearer-token)
 

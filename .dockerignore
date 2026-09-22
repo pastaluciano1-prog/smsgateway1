@@ -1,0 +1,17 @@
+**/node_modules
+**/.next
+**/.expo
+.git
+pocketbase/pb_data
+pocketbase/pocketbase
+pocketbase/pocketbase.exe
+pocketbase/*.zip
+smsgateway-app/android
+smsgateway-app/ios
+**/*.apk
+**/*.keystore
+.env
+**/.env.local
+scripts/results.csv
+scripts/config.json
+scripts/numbers.txt

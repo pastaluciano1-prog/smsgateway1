@@ -18,7 +18,9 @@ COPY docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 8090
-# SQLite data (and uploaded files) persist here.
-VOLUME ["/pb/pb_data"]
+# NOTE: no VOLUME directive on purpose — Railway/Render attach their own
+# persistent volume at /pb/pb_data via the dashboard, and a Dockerfile VOLUME
+# can create an anonymous volume that shadows it. Mount /pb/pb_data yourself
+# (compose does this in docker-compose.yml).
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
