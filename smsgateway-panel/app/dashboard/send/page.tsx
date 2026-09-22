@@ -43,6 +43,9 @@ export default function SendPage() {
   const [roundRobin, setRoundRobin] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
+  // Add a leading "+" to numbers that don't have one (leave "+" numbers alone).
+  const [addPlus, setAddPlus] = useState(true);
+
   useEffect(() => {
     if (!user?.id) return;
     (async () => {
@@ -58,12 +61,16 @@ export default function SendPage() {
       .map((r) => r.trim())
       .filter(Boolean)
       .map((r) => {
-        if (!prefix) return r;
-        // Prepend prefix to bare local numbers (skip if already prefixed or +).
-        if (r.startsWith("+") || r.startsWith(prefix)) return r;
-        return prefix + r.replace(/^0+/, "");
+        let n = r;
+        // Optional country prefix for bare local numbers.
+        if (prefix && !n.startsWith("+") && !n.startsWith(prefix)) {
+          n = prefix + n.replace(/^0+/, "");
+        }
+        // Add "+" when missing; leave numbers that already have one.
+        if (addPlus && !n.startsWith("+")) n = "+" + n;
+        return n;
       });
-  }, [recipients, prefix]);
+  }, [recipients, prefix, addPlus]);
 
   const scheduleIso = () =>
     schedule && sendAt ? new Date(sendAt).toISOString() : undefined;
@@ -87,16 +94,18 @@ export default function SendPage() {
     setBusy(true);
     setResult(null);
     try {
+      let toNum = to.trim();
+      if (addPlus && !toNum.startsWith("+")) toNum = "+" + toNum;
       await createMessage({
         device: d.id,
-        to: to.trim(),
+        to: toNum,
         body,
         sim: simOf(d),
         sendAt: scheduleIso(),
       });
-      setResult(schedule ? "Message scheduled." : "Message queued.");
-      setTo("");
-      setBody("");
+      // Inputs are intentionally kept so you can change the number and resend
+      // the same text without retyping it.
+      setResult(schedule ? "Message scheduled." : `Message queued to ${toNum}.`);
     } catch (err) {
       setResult(err instanceof Error ? err.message : "Failed to queue message.");
     } finally {
@@ -130,8 +139,7 @@ export default function SendPage() {
           failed ? `, ${failed} failed` : ""
         } across ${targets.length} SIM${targets.length > 1 ? "s" : ""}.`
       );
-      setRecipients("");
-      setBody("");
+      // Inputs kept on purpose — change the numbers and reuse the same text.
     } finally {
       setBusy(false);
     }
@@ -295,6 +303,17 @@ export default function SendPage() {
             <div className="mt-1 text-right text-xs text-zinc-400">
               {body.length}/2000
             </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={addPlus}
+                onChange={(e) => setAddPlus(e.target.checked)}
+              />
+              Add “+” to numbers that don&apos;t have one
+            </label>
           </div>
 
           <div className="mt-2">

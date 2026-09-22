@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
-import { listMessages, type MessageFilters } from "@/lib/data";
+import { listMessages, resendMessage, type MessageFilters } from "@/lib/data";
 import type { MessageRecord, MessageStatus } from "@/types/pb";
 
 const STATUS_STYLES: Record<MessageStatus, string> = {
@@ -25,6 +25,40 @@ export default function MessagesPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [filters, setFilters] = useState<MessageFilters>({});
   const [search, setSearch] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const flash = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1800);
+  };
+
+  const copyNumbers = async () => {
+    const nums = Array.from(
+      new Set(
+        items.map((m) => (m.direction === "in" ? m.from : m.to)).filter(Boolean)
+      )
+    );
+    try {
+      await navigator.clipboard.writeText(nums.join("\n"));
+      flash(`Copied ${nums.length} number${nums.length === 1 ? "" : "s"} (this page)`);
+    } catch {
+      flash("Copy failed");
+    }
+  };
+
+  const onResend = async (m: MessageRecord) => {
+    setResendingId(m.id);
+    try {
+      await resendMessage(m);
+      flash(`Re-queued to ${m.to}`);
+      load(page, filters);
+    } catch {
+      flash("Resend failed");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const load = useCallback(
     async (p: number, f: MessageFilters) => {
@@ -63,7 +97,21 @@ export default function MessagesPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           Messages
         </h1>
-        <span className="text-sm text-zinc-400">{totalItems} total</span>
+        <div className="flex items-center gap-3">
+          {toast && (
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              {toast}
+            </span>
+          )}
+          <span className="text-sm text-zinc-400">{totalItems} total</span>
+          <button
+            onClick={copyNumbers}
+            disabled={items.length === 0}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Copy numbers
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -90,13 +138,31 @@ export default function MessagesPage() {
           ]}
           onChange={(v) => setStatus(v as MessageStatus | undefined)}
         />
-        <form onSubmit={onSearch} className="ml-auto">
+        <form onSubmit={onSearch} className="ml-auto flex items-center gap-2">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search number or text…"
             className="w-56 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
           />
+          <button
+            type="submit"
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Search
+          </button>
+          {filters.search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setFilters((f) => ({ ...f, search: undefined }));
+              }}
+              className="text-sm text-zinc-500 hover:underline"
+            >
+              Clear
+            </button>
+          )}
         </form>
       </div>
 
@@ -115,6 +181,7 @@ export default function MessagesPage() {
                 <th className="px-4 py-2">SIM</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">When</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -153,6 +220,17 @@ export default function MessagesPage() {
                         ? m.send_at
                         : m.created
                     ).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {m.direction === "out" && (
+                      <button
+                        onClick={() => onResend(m)}
+                        disabled={resendingId === m.id}
+                        className="text-xs font-medium text-indigo-600 hover:underline disabled:opacity-50"
+                      >
+                        {resendingId === m.id ? "…" : "Resend"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

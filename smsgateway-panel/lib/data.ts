@@ -119,6 +119,19 @@ export function createMessage(m: NewMessage) {
   });
 }
 
+// Re-queue an existing message as a fresh pending send (same device/to/body/sim).
+export function resendMessage(m: MessageRecord) {
+  return pb.collection("messages").create<MessageRecord>({
+    device: m.device,
+    direction: "out",
+    to: m.to,
+    body: m.body,
+    sim: m.sim,
+    status: "pending",
+    send_at: "",
+  });
+}
+
 // Create many outgoing messages efficiently (bulk send).
 export async function createMessages(list: NewMessage[]) {
   const results = await Promise.allSettled(list.map((m) => createMessage(m)));
