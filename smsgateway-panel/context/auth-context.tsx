@@ -14,6 +14,24 @@ import type { UserRecord } from "@/types/pb";
 
 const pb = createClient();
 
+// PocketBase throws a ClientResponseError with per-field details. Surface the
+// specific reason ("email already in use", "password too short") instead of the
+// generic "Failed to create record."
+function pbErrorMessage(err: unknown, fallback: string): string {
+  const e = err as {
+    response?: { message?: string; data?: Record<string, { message?: string }> };
+    message?: string;
+  };
+  const data = e?.response?.data;
+  if (data && typeof data === "object") {
+    const fieldMsgs = Object.entries(data)
+      .map(([field, v]) => (v?.message ? `${field}: ${v.message}` : ""))
+      .filter(Boolean);
+    if (fieldMsgs.length) return fieldMsgs.join("  ");
+  }
+  return e?.response?.message || e?.message || fallback;
+}
+
 interface AuthResult {
   success: boolean;
   user: UserRecord | null;
@@ -98,9 +116,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // onChange handles state; return the record for the caller.
       return { success: true, user: authData.record as unknown as UserRecord };
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Invalid email or password.";
-      return { success: false, user: null, error: { message } };
+      return {
+        success: false,
+        user: null,
+        error: { message: pbErrorMessage(err, "Invalid email or password.") },
+      };
     }
   };
 
@@ -122,9 +142,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .authWithPassword(email, password);
       return { success: true, user: authData.record as unknown as UserRecord };
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not create account.";
-      return { success: false, user: null, error: { message } };
+      return {
+        success: false,
+        user: null,
+        error: { message: pbErrorMessage(err, "Could not create account.") },
+      };
     }
   };
 
