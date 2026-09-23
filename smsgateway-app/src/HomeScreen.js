@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, PermissionsAndroid } from 'react-native';
-import { loadConfig, loadCounters, clearConfig } from './store';
+import { loadConfig, loadCounters, clearConfig, getFlag, setFlag } from './store';
 import SmsGateway from '../modules/sms-gateway/src/SmsGatewayModule';
 import { startPolling, stopPolling } from './poller';
 import { registerDevices } from './api';
@@ -52,14 +52,23 @@ export default function HomeScreen({ onDisconnect }) {
     } catch (e) { }
   }
 
-  function setupBackground() {
-    // Keep the poll loop alive with the screen off, and nudge the user to
-    // exempt the app from battery optimization.
+  async function setupBackground() {
+    // Keep the poll loop alive with the screen off.
     try { SmsGateway.startService(); } catch (e) { }
     try {
       const ok = SmsGateway.isIgnoringBatteryOptimizations();
       setBatteryOk(ok);
-      if (!ok) SmsGateway.requestIgnoreBatteryOptimizations();
+      // Only auto-prompt for the battery exemption ONCE, ever. Otherwise, if
+      // Android relaunches the app, it would nag on every launch. After the
+      // first ask, the on-screen "Allow background running" card lets the user
+      // enable it whenever they want.
+      if (!ok) {
+        const alreadyAsked = await getFlag('asked_battery');
+        if (!alreadyAsked) {
+          SmsGateway.requestIgnoreBatteryOptimizations();
+          await setFlag('asked_battery', true);
+        }
+      }
     } catch (e) { }
   }
 

@@ -31,6 +31,7 @@ export default function OverviewPage() {
     failed: 0,
     received: 0,
     pending: 0,
+    sending: 0,
     scheduled: 0,
   });
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
@@ -41,17 +42,18 @@ export default function OverviewPage() {
     (async () => {
       setLoading(true);
       try {
-        const [sent, failed, received, pending, scheduled, devs, recentMsgs] =
+        const [sent, failed, received, pending, sending, scheduled, devs, recentMsgs] =
           await Promise.all([
             countMessages(user.id, "sent"),
             countMessages(user.id, "failed"),
             countMessages(user.id, "received"),
             countMessages(user.id, "pending"),
+            countMessages(user.id, "sending"),
             countMessages(user.id, "scheduled"),
             listUserDevices(user.id),
             listMessages(user.id, {}, 1, 6),
           ]);
-        setStats({ sent, failed, received, pending, scheduled });
+        setStats({ sent, failed, received, pending, sending, scheduled });
         setDevices(devs);
         setRecent(recentMsgs.items);
       } finally {
@@ -66,9 +68,10 @@ export default function OverviewPage() {
 
   const cards = [
     { label: "Sent", value: stats.sent, tone: "text-emerald-600" },
+    { label: "Sending", value: stats.sending, tone: "text-sky-600" },
+    { label: "Pending", value: stats.pending, tone: "text-amber-600" },
     { label: "Failed", value: stats.failed, tone: "text-red-600" },
     { label: "Received", value: stats.received, tone: "text-indigo-600" },
-    { label: "Pending", value: stats.pending, tone: "text-amber-600" },
   ];
 
   return (
@@ -92,7 +95,7 @@ export default function OverviewPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((c) => (
           <div
             key={c.label}

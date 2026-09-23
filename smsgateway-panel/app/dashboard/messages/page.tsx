@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/auth-context";
-import { listMessages, resendMessage, type MessageFilters } from "@/lib/data";
-import type { MessageRecord, MessageStatus } from "@/types/pb";
+import {
+  listMessages,
+  listAllMessages,
+  resendMessage,
+  resendMany,
+  listUserDevices,
+  type MessageFilters,
+} from "@/lib/data";
+import type { DeviceRecord, MessageRecord, MessageStatus } from "@/types/pb";
 
 const STATUS_STYLES: Record<MessageStatus, string> = {
   sent: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
@@ -16,6 +23,22 @@ const STATUS_STYLES: Record<MessageStatus, string> = {
 
 const PER_PAGE = 50;
 
+function simOf(d: DeviceRecord): number | undefined {
+  return d.subscription_id ?? d.sim_slot ?? undefined;
+}
+
+function deviceOf(m: MessageRecord): DeviceRecord | undefined {
+  return m.expand?.device as DeviceRecord | undefined;
+}
+
+function phoneLabel(m: MessageRecord): string {
+  const d = deviceOf(m);
+  if (!d) return "—";
+  const key = (d.expand?.api_key as { name?: string } | undefined)?.name;
+  const name = d.name || d.carrier || `SIM ${d.sim_slot ?? "?"}`;
+  return key ? `${name} · ${key}` : name;
+}
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<MessageRecord[]>([]);
@@ -27,37 +50,14 @@ export default function MessagesPage() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [devices, setDevices] = useState<DeviceRecord[]>([]);
+  // "" = resend from the message's original phone; otherwise a device id.
+  const [resendTarget, setResendTarget] = useState("");
 
   const flash = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 1800);
-  };
-
-  const copyNumbers = async () => {
-    const nums = Array.from(
-      new Set(
-        items.map((m) => (m.direction === "in" ? m.from : m.to)).filter(Boolean)
-      )
-    );
-    try {
-      await navigator.clipboard.writeText(nums.join("\n"));
-      flash(`Copied ${nums.length} number${nums.length === 1 ? "" : "s"} (this page)`);
-    } catch {
-      flash("Copy failed");
-    }
-  };
-
-  const onResend = async (m: MessageRecord) => {
-    setResendingId(m.id);
-    try {
-      await resendMessage(m);
-      flash(`Re-queued to ${m.to}`);
-      load(page, filters);
-    } catch {
-      flash("Resend failed");
-    } finally {
-      setResendingId(null);
-    }
+    setTimeout(() => setToast(null), 2200);
   };
 
   const load = useCallback(
@@ -81,6 +81,10 @@ export default function MessagesPage() {
     load(1, filters);
   }, [load, filters]);
 
+  useEffect(() => {
+    if (user?.id) listUserDevices(user.id).then(setDevices);
+  }, [user]);
+
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setFilters((f) => ({ ...f, search: search.trim() || undefined }));
@@ -90,6 +94,62 @@ export default function MessagesPage() {
     setFilters((f) => ({ ...f, status }));
   const setDirection = (direction?: "out" | "in") =>
     setFilters((f) => ({ ...f, direction }));
+
+  const targetFor = () => {
+    if (!resendTarget) return undefined;
+    const d = devices.find((x) => x.id === resendTarget);
+    return d ? { device: d.id, sim: simOf(d) } : undefined;
+  };
+
+  const copyNumbers = async () => {
+    if (!user?.id) return;
+    try {
+      const all = await listAllMessages(user.id, filters);
+      const nums = Array.from(
+        new Set(
+          all.map((m) => (m.direction === "in" ? m.from : m.to)).filter(Boolean)
+        )
+      );
+      await navigator.clipboard.writeText(nums.join("\n"));
+      flash(`Copied ${nums.length} unique number${nums.length === 1 ? "" : "s"}`);
+    } catch {
+      flash("Copy failed");
+    }
+  };
+
+  const onResend = async (m: MessageRecord) => {
+    setResendingId(m.id);
+    try {
+      await resendMessage(m, targetFor());
+      flash(`Re-queued to ${m.to}`);
+      load(page, filters);
+    } catch {
+      flash("Resend failed");
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const retryAllFailed = async () => {
+    if (!user?.id) return;
+    setBusy(true);
+    try {
+      const failed = await listAllMessages(user.id, {
+        ...filters,
+        status: "failed",
+        direction: "out",
+      });
+      if (failed.length === 0) {
+        flash("No failed messages to retry");
+        return;
+      }
+      const { ok, failed: bad } = await resendMany(failed, targetFor());
+      flash(`Retried ${ok}${bad ? `, ${bad} failed` : ""}`);
+      load(page, filters);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div>
@@ -104,16 +164,44 @@ export default function MessagesPage() {
             </span>
           )}
           <span className="text-sm text-zinc-400">{totalItems} total</span>
-          <button
-            onClick={copyNumbers}
-            disabled={items.length === 0}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Copy numbers
-          </button>
         </div>
       </div>
 
+      {/* Actions row */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-zinc-400">Resend from:</span>
+        <select
+          value={resendTarget}
+          onChange={(e) => setResendTarget(e.target.value)}
+          className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        >
+          <option value="">Original phone</option>
+          {devices.map((d) => {
+            const key = (d.expand?.api_key as { name?: string } | undefined)?.name;
+            const name = d.name || d.carrier || `SIM ${d.sim_slot ?? "?"}`;
+            return (
+              <option key={d.id} value={d.id}>
+                {key ? `${name} · ${key}` : name}
+              </option>
+            );
+          })}
+        </select>
+        <button
+          onClick={retryAllFailed}
+          disabled={busy}
+          className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:hover:bg-red-950"
+        >
+          {busy ? "Retrying…" : "Retry all failed"}
+        </button>
+        <button
+          onClick={copyNumbers}
+          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          Copy numbers
+        </button>
+      </div>
+
+      {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterPills
           label="Direction"
@@ -131,6 +219,7 @@ export default function MessagesPage() {
           options={[
             { v: undefined, l: "All" },
             { v: "pending", l: "Pending" },
+            { v: "sending", l: "Sending" },
             { v: "sent", l: "Sent" },
             { v: "failed", l: "Failed" },
             { v: "received", l: "Received" },
@@ -177,8 +266,8 @@ export default function MessagesPage() {
               <tr>
                 <th className="px-4 py-2">Dir</th>
                 <th className="px-4 py-2">Number</th>
+                <th className="px-4 py-2">Phone / SIM</th>
                 <th className="px-4 py-2">Message</th>
-                <th className="px-4 py-2">SIM</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">When</th>
                 <th className="px-4 py-2"></th>
@@ -188,7 +277,7 @@ export default function MessagesPage() {
               {items.map((m) => (
                 <tr
                   key={m.id}
-                  className="border-b border-zinc-50 last:border-0 dark:border-zinc-800/60"
+                  className="border-b border-zinc-50 align-top last:border-0 dark:border-zinc-800/60"
                 >
                   <td className="px-4 py-2 text-xs font-medium text-zinc-500">
                     {m.direction === "in" ? "IN" : "OUT"}
@@ -196,29 +285,30 @@ export default function MessagesPage() {
                   <td className="px-4 py-2 text-zinc-800 dark:text-zinc-200">
                     {m.direction === "in" ? m.from : m.to}
                   </td>
-                  <td className="max-w-xs truncate px-4 py-2 text-zinc-600 dark:text-zinc-400">
-                    {m.body}
-                    {m.error && (
-                      <span className="ml-2 text-xs text-red-500">
-                        ({m.error})
-                      </span>
+                  <td className="px-4 py-2 text-xs text-zinc-500">
+                    {phoneLabel(m)}
+                    {m.sim != null && (
+                      <span className="ml-1 text-zinc-400">(sim {m.sim})</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-zinc-500">{m.sim ?? "—"}</td>
+                  <td className="max-w-xs px-4 py-2 text-zinc-600 dark:text-zinc-400">
+                    <div className="truncate">{m.body}</div>
+                    {m.error && (
+                      <div className="mt-0.5 text-xs font-medium text-red-500">
+                        ⚠ {m.error}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        STATUS_STYLES[m.status]
-                      }`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[m.status]}`}
                     >
                       {m.status}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-xs text-zinc-400">
                     {new Date(
-                      m.status === "scheduled" && m.send_at
-                        ? m.send_at
-                        : m.created
+                      m.status === "scheduled" && m.send_at ? m.send_at : m.created
                     ).toLocaleString()}
                   </td>
                   <td className="px-4 py-2 text-right">

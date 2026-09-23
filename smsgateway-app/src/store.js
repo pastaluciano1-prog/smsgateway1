@@ -6,6 +6,16 @@ const KEYS = {
   counters: 'cfg_counters',
 };
 
+// --- Generic one-shot flags (e.g. "we already asked for X once") ---
+
+export async function getFlag(name) {
+  return (await AsyncStorage.getItem('flag_' + name)) === '1';
+}
+
+export async function setFlag(name, value) {
+  await AsyncStorage.setItem('flag_' + name, value ? '1' : '0');
+}
+
 // --- Connection config (host URL + API key) ---
 
 export async function saveConfig({ host, apiKey }) {

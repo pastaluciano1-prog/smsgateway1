@@ -94,6 +94,28 @@ export function listMessages(
   return pb.collection("messages").getList<MessageRecord>(page, perPage, {
     filter: parts.join(" && "),
     sort: "-created",
+    expand: "device,device.api_key",
+  });
+}
+
+// Build the same filter listMessages uses (for fetching all matching rows).
+function messageFilter(userId: string, filters: MessageFilters) {
+  const parts = [`device.api_key.user = "${userId}"`];
+  if (filters.direction) parts.push(`direction = "${filters.direction}"`);
+  if (filters.status) parts.push(`status = "${filters.status}"`);
+  if (filters.search) {
+    const s = filters.search.replace(/"/g, "");
+    parts.push(`(to ~ "${s}" || from ~ "${s}" || body ~ "${s}")`);
+  }
+  return parts.join(" && ");
+}
+
+// All rows matching the current filter (across every page). Used by "copy
+// numbers" and "retry all".
+export function listAllMessages(userId: string, filters: MessageFilters = {}) {
+  return pb.collection("messages").getFullList<MessageRecord>({
+    filter: messageFilter(userId, filters),
+    sort: "-created",
     expand: "device",
   });
 }
@@ -119,17 +141,33 @@ export function createMessage(m: NewMessage) {
   });
 }
 
-// Re-queue an existing message as a fresh pending send (same device/to/body/sim).
-export function resendMessage(m: MessageRecord) {
+// Re-queue an existing message as a fresh pending send. Optionally send it from
+// a different device (phone/SIM) instead of the original one.
+export function resendMessage(
+  m: MessageRecord,
+  target?: { device: string; sim?: number }
+) {
   return pb.collection("messages").create<MessageRecord>({
-    device: m.device,
+    device: target?.device ?? m.device,
     direction: "out",
     to: m.to,
     body: m.body,
-    sim: m.sim,
+    sim: target ? target.sim : m.sim,
     status: "pending",
     send_at: "",
   });
+}
+
+// Re-queue many messages (e.g. "retry all failed").
+export async function resendMany(
+  list: MessageRecord[],
+  target?: { device: string; sim?: number }
+) {
+  const results = await Promise.allSettled(
+    list.map((m) => resendMessage(m, target))
+  );
+  const ok = results.filter((r) => r.status === "fulfilled").length;
+  return { ok, failed: results.length - ok };
 }
 
 // Create many outgoing messages efficiently (bulk send).

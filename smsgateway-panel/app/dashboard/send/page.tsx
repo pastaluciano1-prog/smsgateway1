@@ -42,6 +42,8 @@ export default function SendPage() {
   const [prefix, setPrefix] = useState("");
   const [roundRobin, setRoundRobin] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  // Drip rate: total messages released per minute (0 = send all now).
+  const [dripRate, setDripRate] = useState("");
 
   // Add a leading "+" to numbers that don't have one (leave "+" numbers alone).
   const [addPlus, setAddPlus] = useState(true);
@@ -122,22 +124,34 @@ export default function SendPage() {
     setBusy(true);
     setResult(null);
     try {
-      const iso = scheduleIso();
+      const scheduleIsoVal = scheduleIso();
+      const rate = Number(dripRate) || 0;
+      const baseTime = schedule && sendAt ? new Date(sendAt).getTime() : Date.now();
+
       const list = parsedRecipients.map((num, i) => {
         const d = targets[i % targets.length];
-        return {
-          device: d.id,
-          to: num,
-          body,
-          sim: simOf(d),
-          sendAt: iso,
-        };
+        // Drip: release `rate` messages per minute by staggering send_at.
+        let sendAtIso = scheduleIsoVal;
+        if (rate > 0) {
+          const offsetMin = Math.floor(i / rate);
+          const t = baseTime + offsetMin * 60_000;
+          // The very first minute's batch goes out immediately (unless the whole
+          // send is also scheduled for later).
+          sendAtIso =
+            offsetMin === 0 && !schedule
+              ? undefined
+              : new Date(t).toISOString();
+        }
+        return { device: d.id, to: num, body, sim: simOf(d), sendAt: sendAtIso };
       });
       const { ok, failed } = await createMessages(list);
+      const minutes = rate > 0 ? Math.ceil(parsedRecipients.length / rate) : 0;
       setResult(
-        `${ok} ${schedule ? "scheduled" : "queued"}${
+        `${ok} ${rate > 0 || schedule ? "scheduled" : "queued"}${
           failed ? `, ${failed} failed` : ""
-        } across ${targets.length} SIM${targets.length > 1 ? "s" : ""}.`
+        } across ${targets.length} SIM${targets.length > 1 ? "s" : ""}${
+          rate > 0 ? ` · draining at ${rate}/min (~${minutes} min)` : ""
+        }.`
       );
       // Inputs kept on purpose — change the numbers and reuse the same text.
     } finally {
@@ -284,6 +298,24 @@ export default function SendPage() {
                     onChange={setDeviceId}
                   />
                 )}
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Drip rate (messages per minute)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={dripRate}
+                  onChange={(e) => setDripRate(e.target.value)}
+                  placeholder="0 = send all at once"
+                  className={fieldClass()}
+                />
+                <p className="mt-1 text-xs text-zinc-400">
+                  Spreads a big list over time — e.g. 20/min drains 1,000 numbers
+                  over ~50 minutes. The phone releases them as they come due.
+                </p>
               </div>
             </div>
           )}
