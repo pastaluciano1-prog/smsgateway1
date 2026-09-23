@@ -43,5 +43,6 @@ COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
 # Railway/hosts inject $PORT; the panel listens on it (default 3000).
-EXPOSE 3000
+# 8090 is PocketBase — expose/map it if you want the admin UI (/_/).
+EXPOSE 3000 8090
 CMD ["/start.sh"]

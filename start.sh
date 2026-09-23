@@ -19,7 +19,9 @@ else
 fi
 
 # Start PocketBase (migrations auto-apply, creating tables on first boot).
-/pb/pocketbase serve --http=127.0.0.1:8090 \
+# Bound to 0.0.0.0 so its admin UI (/_/) is reachable when port 8090 is exposed;
+# the panel still reaches it locally at 127.0.0.1:8090.
+/pb/pocketbase serve --http=0.0.0.0:8090 \
   --dir "$DATA_DIR" --migrationsDir "$MIGRATIONS_DIR" &
 
 echo "Waiting for PocketBase to be ready..."
