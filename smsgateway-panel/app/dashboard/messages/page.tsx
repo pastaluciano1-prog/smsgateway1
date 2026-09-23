@@ -19,6 +19,7 @@ const STATUS_STYLES: Record<MessageStatus, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   scheduled: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
   sending: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  cancelled: "bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
 const PER_PAGE = 50;
@@ -224,6 +225,7 @@ export default function MessagesPage() {
             { v: "failed", l: "Failed" },
             { v: "received", l: "Received" },
             { v: "scheduled", l: "Scheduled" },
+            { v: "cancelled", l: "Cancelled" },
           ]}
           onChange={(v) => setStatus(v as MessageStatus | undefined)}
         />

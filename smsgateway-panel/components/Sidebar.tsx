@@ -8,6 +8,7 @@ const nav = [
   { href: "/dashboard", label: "Overview", icon: "▦" },
   { href: "/dashboard/keys", label: "API Keys & Devices", icon: "🔑" },
   { href: "/dashboard/send", label: "Send", icon: "✈" },
+  { href: "/dashboard/campaigns", label: "Campaigns", icon: "📢" },
   { href: "/dashboard/messages", label: "Messages", icon: "✉" },
 ];
 

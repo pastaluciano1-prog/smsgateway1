@@ -33,7 +33,19 @@ export type MessageStatus =
   | "failed"
   | "received"
   | "scheduled"
-  | "sending";
+  | "sending"
+  | "cancelled";
+
+export type CampaignStatus = "running" | "stopped" | "completed";
+
+export interface CampaignRecord extends RecordModel {
+  name: string;
+  device?: string;
+  body: string;
+  rate_per_min?: number;
+  status: CampaignStatus;
+  total?: number;
+}
 
 export interface MessageRecord extends RecordModel {
   device?: string;
@@ -45,4 +57,5 @@ export interface MessageRecord extends RecordModel {
   status: MessageStatus;
   error?: string;
   send_at?: string;
+  campaign?: string;
 }

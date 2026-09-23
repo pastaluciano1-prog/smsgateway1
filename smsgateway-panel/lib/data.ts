@@ -3,12 +3,22 @@
 import { createClient } from "@/lib/pb";
 import type {
   ApiKeyRecord,
+  CampaignRecord,
   DeviceRecord,
   MessageRecord,
   MessageStatus,
 } from "@/types/pb";
 
 const pb = createClient();
+
+function simOfDevice(d: DeviceRecord): number | undefined {
+  return d.subscription_id ?? d.sim_slot ?? undefined;
+}
+
+// PocketBase datetime format.
+function pbDate(d: Date) {
+  return d.toISOString().replace("T", " ");
+}
 
 // A reasonably long, URL-safe random token for a phone's API key.
 export function generateKey(): string {
@@ -192,4 +202,124 @@ export async function countMessages(
     fields: "id",
   });
   return res.totalItems;
+}
+
+// ---- Campaigns ------------------------------------------------------------
+
+export interface NewCampaign {
+  name: string;
+  body: string;
+  ratePerMin: number; // total messages released per minute
+  devices: DeviceRecord[]; // one or more targets (round-robin)
+  recipients: string[];
+}
+
+// Create a campaign and queue all its messages, staggering send_at so the
+// phone releases them at ~ratePerMin. Uses PocketBase's batch API for speed.
+export async function createCampaign(c: NewCampaign) {
+  const campaign = await pb.collection("campaigns").create<CampaignRecord>({
+    name: c.name,
+    device: c.devices[0]?.id,
+    body: c.body,
+    rate_per_min: c.ratePerMin,
+    status: "running",
+    total: c.recipients.length,
+  });
+
+  const start = Date.now();
+  const spacingMs = c.ratePerMin > 0 ? 60000 / c.ratePerMin : 0;
+  const CHUNK = 500;
+
+  for (let i = 0; i < c.recipients.length; i += CHUNK) {
+    const batch = pb.createBatch();
+    for (let j = i; j < Math.min(i + CHUNK, c.recipients.length); j++) {
+      const d = c.devices[j % c.devices.length];
+      const due = start + Math.floor(j) * spacingMs;
+      const scheduled = spacingMs > 0 && due > Date.now();
+      batch.collection("messages").create({
+        device: d.id,
+        campaign: campaign.id,
+        direction: "out",
+        to: c.recipients[j],
+        body: c.body,
+        sim: simOfDevice(d),
+        status: scheduled ? "scheduled" : "pending",
+        send_at: scheduled ? pbDate(new Date(due)) : "",
+      });
+    }
+    await batch.send();
+  }
+
+  return campaign;
+}
+
+export function listCampaigns(userId: string) {
+  return pb.collection("campaigns").getFullList<CampaignRecord>({
+    filter: `device.api_key.user = "${userId}"`,
+    sort: "-created",
+    expand: "device",
+  });
+}
+
+export async function campaignStats(campaignId: string) {
+  const statuses: MessageStatus[] = [
+    "sent",
+    "failed",
+    "pending",
+    "sending",
+    "scheduled",
+    "cancelled",
+  ];
+  const entries = await Promise.all(
+    statuses.map(async (s) => {
+      const res = await pb.collection("messages").getList<MessageRecord>(1, 1, {
+        filter: `campaign = "${campaignId}" && status = "${s}"`,
+        fields: "id",
+      });
+      return [s, res.totalItems] as const;
+    })
+  );
+  return Object.fromEntries(entries) as Record<MessageStatus, number>;
+}
+
+// Stop a running campaign: mark it stopped and cancel everything not yet sent
+// (pending / scheduled), so those numbers count as "not sent".
+export async function stopCampaign(campaignId: string) {
+  const pending = await pb.collection("messages").getFullList<MessageRecord>({
+    filter: `campaign = "${campaignId}" && (status = "pending" || status = "scheduled")`,
+    fields: "id",
+  });
+  for (let i = 0; i < pending.length; i += 500) {
+    const batch = pb.createBatch();
+    for (const m of pending.slice(i, i + 500)) {
+      batch.collection("messages").update(m.id, { status: "cancelled", send_at: "" });
+    }
+    await batch.send();
+  }
+  return pb.collection("campaigns").update<CampaignRecord>(campaignId, {
+    status: "stopped",
+  });
+}
+
+export function deleteCampaign(id: string) {
+  return pb.collection("campaigns").delete(id);
+}
+
+export function setCampaignCompleted(id: string) {
+  return pb
+    .collection("campaigns")
+    .update<CampaignRecord>(id, { status: "completed" });
+}
+
+// Recipients of a campaign filtered by outcome, for the sent / not-sent lists.
+export function listCampaignNumbers(
+  campaignId: string,
+  statuses: MessageStatus[]
+) {
+  const statusFilter = statuses.map((s) => `status = "${s}"`).join(" || ");
+  return pb.collection("messages").getFullList<MessageRecord>({
+    filter: `campaign = "${campaignId}" && (${statusFilter})`,
+    fields: "to,status,error",
+    sort: "created",
+  });
 }
