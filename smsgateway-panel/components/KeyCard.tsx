@@ -196,8 +196,8 @@ export default function KeyCard({
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-zinc-400">
                   <th className="py-1 pr-3">Name</th>
-                  <th className="py-1 pr-3">Slot</th>
-                  <th className="py-1 pr-3">Sub ID</th>
+                  <th className="py-1 pr-3">Phone</th>
+                  <th className="py-1 pr-3">Android</th>
                   <th className="py-1 pr-3">Carrier</th>
                   <th className="py-1 pr-3">Number</th>
                   <th className="py-1 pr-3">Rate/min</th>
@@ -212,12 +212,17 @@ export default function KeyCard({
                   >
                     <td className="py-2 pr-3 text-zinc-800 dark:text-zinc-200">
                       {d.name || "—"}
+                      {d.sim_slot != null && (
+                        <span className="ml-1 text-xs text-zinc-400">
+                          slot {d.sim_slot}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-zinc-600 dark:text-zinc-400">
-                      {d.sim_slot ?? "—"}
+                      {[d.manufacturer, d.model].filter(Boolean).join(" ") || "—"}
                     </td>
                     <td className="py-2 pr-3 text-zinc-600 dark:text-zinc-400">
-                      {d.subscription_id ?? "—"}
+                      {d.android || "—"}
                     </td>
                     <td className="py-2 pr-3 text-zinc-600 dark:text-zinc-400">
                       {d.carrier || "—"}

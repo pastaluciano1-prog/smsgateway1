@@ -9,6 +9,9 @@ interface IncomingSim {
   carrier?: string;
   number?: string;
   name?: string;
+  model?: string;
+  manufacturer?: string;
+  android?: string;
 }
 
 // POST /register  { devices: [{ sim_slot, subscription_id, carrier, number }] }
@@ -55,6 +58,9 @@ export async function POST(req: Request) {
         subscription_id: sim.subscription_id,
         carrier: sim.carrier,
         number: sim.number,
+        model: sim.model,
+        manufacturer: sim.manufacturer,
+        android: sim.android,
         last_seen: now,
       };
       // Don't clobber a user-set name with an empty one.

@@ -55,6 +55,26 @@ class SmsGatewayModule : Module() {
       }
     }
 
+    // Device identity: manufacturer, model, a friendly name, and Android version.
+    // No permission required (all from android.os.Build / Settings).
+    Function("getDeviceInfo") {
+      val context = appContext.reactContext
+      val friendly = try {
+        context?.let {
+          android.provider.Settings.Global.getString(it.contentResolver, "device_name")
+        }
+      } catch (_: Exception) { null }
+
+      mapOf(
+        "manufacturer" to Build.MANUFACTURER,
+        "brand" to Build.BRAND,
+        "model" to Build.MODEL,
+        "name" to (friendly ?: ""),
+        "androidRelease" to Build.VERSION.RELEASE,
+        "sdkInt" to Build.VERSION.SDK_INT
+      )
+    }
+
     // Sends an SMS on a specific SIM (by subscriptionId, or -1 for default) and
     // resolves ONLY after the platform reports the actual send result. This is
     // what surfaces real failures (no credit, no service, radio off) instead of

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { saveConfig } from './store';
 
@@ -9,7 +9,6 @@ export default function ConnectScreen({ onConnected }) {
     const [host, setHost] = useState('');
     const [apiKey, setApiKey] = useState('');
 
-    // Called when a QR code is detected
     function handleScan({ data }) {
         setScanning(false);
         try {
@@ -25,21 +24,21 @@ export default function ConnectScreen({ onConnected }) {
 
     async function save(h, k) {
         if (!h || !k) {
-            Alert.alert('Missing info', 'Both host URL and API key are required.');
+            Alert.alert('Missing info', 'Both the panel URL and the API key are required.');
             return;
         }
         await saveConfig({ host: h.trim(), apiKey: k.trim() });
         onConnected();
     }
 
-    // Scanner view
+    // ---- Scanner ----
     if (scanning) {
         if (!permission?.granted) {
             return (
                 <View style={styles.center}>
                     <Text style={styles.info}>Camera permission is needed to scan.</Text>
-                    <TouchableOpacity style={styles.btn} onPress={requestPermission}>
-                        <Text style={styles.btnText}>Grant camera access</Text>
+                    <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+                        <Text style={styles.primaryBtnText}>Grant camera access</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => setScanning(false)}>
                         <Text style={styles.link}>Cancel</Text>
@@ -55,58 +54,108 @@ export default function ConnectScreen({ onConnected }) {
                     barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
                     onBarcodeScanned={handleScan}
                 />
+                <View style={styles.scanHint}>
+                    <Text style={styles.scanHintText}>Point at the QR code in your panel</Text>
+                </View>
                 <TouchableOpacity style={styles.cancelScan} onPress={() => setScanning(false)}>
-                    <Text style={styles.btnText}>Cancel</Text>
+                    <Text style={styles.primaryBtnText}>Cancel</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    // Default: connect form
+    // ---- Connect form ----
     return (
-        <View style={styles.center}>
-            <Text style={styles.title}>Connect to your panel</Text>
+        <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
+            <View style={styles.logo}>
+                <Text style={styles.logoMark}>✈</Text>
+            </View>
+            <Text style={styles.title}>SMS Gateway</Text>
+            <Text style={styles.subtitle}>Connect this phone to your panel</Text>
 
-            <TouchableOpacity style={styles.btn} onPress={async () => {
-                if (!permission?.granted) await requestPermission();
-                setScanning(true);
-            }}>
-                <Text style={styles.btnText}>📷 Scan QR code</Text>
-            </TouchableOpacity>
+            <View style={styles.card}>
+                <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={async () => {
+                        if (!permission?.granted) await requestPermission();
+                        setScanning(true);
+                    }}
+                >
+                    <Text style={styles.primaryBtnText}>Scan QR code</Text>
+                </TouchableOpacity>
 
-            <Text style={styles.or}>— or enter manually —</Text>
+                <View style={styles.dividerRow}>
+                    <View style={styles.divLine} />
+                    <Text style={styles.divText}>or enter manually</Text>
+                    <View style={styles.divLine} />
+                </View>
 
-            <TextInput
-                style={styles.input}
-                placeholder="Host URL (https://...)"
-                autoCapitalize="none"
-                value={host}
-                onChangeText={setHost}
-            />
-            <TextInput
-                style={styles.input}
-                placeholder="API key"
-                autoCapitalize="none"
-                value={apiKey}
-                onChangeText={setApiKey}
-            />
-            <TouchableOpacity style={styles.btn} onPress={() => save(host, apiKey)}>
-                <Text style={styles.btnText}>Connect</Text>
-            </TouchableOpacity>
-        </View>
+                <Text style={styles.label}>Panel URL</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="https://your-panel.com"
+                    placeholderTextColor="#9ca3af"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    value={host}
+                    onChangeText={setHost}
+                />
+
+                <Text style={[styles.label, { marginTop: 14 }]}>API key</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Paste your API key"
+                    placeholderTextColor="#9ca3af"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={apiKey}
+                    onChangeText={setApiKey}
+                />
+
+                <TouchableOpacity style={[styles.primaryBtn, { marginTop: 20 }]} onPress={() => save(host, apiKey)}>
+                    <Text style={styles.primaryBtnText}>Connect</Text>
+                </TouchableOpacity>
+            </View>
+
+            <Text style={styles.help}>
+                Find these in your panel under{'\n'}
+                <Text style={styles.helpBold}>API Keys &amp; Devices → Generate QR</Text>
+            </Text>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    center: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#fff' },
-    title: { fontSize: 22, fontWeight: 'bold', marginBottom: 24, textAlign: 'center' },
+    screen: { flexGrow: 1, justifyContent: 'center', padding: 24, backgroundColor: '#f2f3f5' },
+    center: { flex: 1, padding: 24, justifyContent: 'center', backgroundColor: '#f2f3f5' },
+
+    logo: { alignSelf: 'center', width: 72, height: 72, borderRadius: 20, backgroundColor: '#4f46e5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+    logoMark: { color: '#fff', fontSize: 34, transform: [{ rotate: '-10deg' }] },
+    title: { fontSize: 26, fontWeight: '800', color: '#111827', textAlign: 'center', letterSpacing: -0.5 },
+    subtitle: { fontSize: 15, color: '#6b7280', textAlign: 'center', marginTop: 4, marginBottom: 28 },
+
+    card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+
+    primaryBtn: { backgroundColor: '#4f46e5', paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
+    primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+    dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+    divLine: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
+    divText: { marginHorizontal: 12, color: '#9ca3af', fontSize: 13 },
+
+    label: { fontSize: 12, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 },
+    input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827', backgroundColor: '#fff' },
+
+    help: { textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 22, lineHeight: 19 },
+    helpBold: { color: '#6b7280', fontWeight: '700' },
+
     camera: { flex: 1 },
-    cancelScan: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: '#000a', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 8 },
-    btn: { backgroundColor: '#2563eb', padding: 14, borderRadius: 8, alignItems: 'center', marginVertical: 8 },
-    btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-    or: { textAlign: 'center', color: '#888', marginVertical: 16 },
-    input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, marginVertical: 6, fontSize: 15 },
+    scanHint: { position: 'absolute', top: 80, alignSelf: 'center', backgroundColor: '#000a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
+    scanHintText: { color: '#fff', fontSize: 14 },
+    cancelScan: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: '#4f46e5', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 14 },
+
     info: { textAlign: 'center', marginBottom: 16, color: '#444' },
-    link: { color: '#2563eb', textAlign: 'center', marginTop: 16 },
+    link: { color: '#4f46e5', textAlign: 'center', marginTop: 16, fontSize: 15, fontWeight: '600' },
 });

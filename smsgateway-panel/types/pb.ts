@@ -19,6 +19,9 @@ export interface DeviceRecord extends RecordModel {
   subscription_id?: number;
   carrier?: string;
   number?: string;
+  model?: string;
+  manufacturer?: string;
+  android?: string;
   rate_limit_per_min?: number;
   last_seen?: string;
 }

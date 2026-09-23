@@ -46,17 +46,37 @@ export async function reportStatus(id, status, error) {
 }
 
 // Register / update this phone's SIMs on the server so the panel knows about
-// them (carrier, slot, subscription id). Idempotent — safe to call on every
-// connect/refresh. `sims` is the array returned by SmsGateway.getSimInfo().
-export async function registerDevices(sims) {
+// them (carrier, slot, model, Android version). Idempotent — safe to call on
+// every connect/refresh. `sims` is SmsGateway.getSimInfo(); `info` is
+// SmsGateway.getDeviceInfo().
+export async function registerDevices(sims, info) {
   if (!sims || sims.length === 0) return;
   const { base, headers } = await getBase();
+
+  const model = info?.model || '';
+  const manufacturer = info?.manufacturer || '';
+  const android = info
+    ? `Android ${info.androidRelease} (API ${info.sdkInt})`
+    : '';
+  // A friendly default name for the device row: the user's device name, else
+  // "Samsung SM-S938B". Carrier is appended when there are multiple SIMs.
+  const friendly =
+    info?.name ||
+    [manufacturer, model].filter(Boolean).join(' ') ||
+    'Phone';
+
   const devices = sims.map((s) => ({
     sim_slot: s.slot,
     subscription_id: s.subscriptionId,
     carrier: s.carrier || '',
     number: s.number || '',
+    model,
+    manufacturer,
+    android,
+    name:
+      sims.length > 1 && s.carrier ? `${friendly} · ${s.carrier}` : friendly,
   }));
+
   const res = await fetchWithTimeout(`${base}/register`, {
     method: 'POST',
     headers,

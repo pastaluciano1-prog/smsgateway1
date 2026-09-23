@@ -42,9 +42,11 @@ export default function HomeScreen({ onDisconnect }) {
       if (result[PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE] === GRANTED) {
         const list = SmsGateway.getSimInfo();
         setSims(list);
-        // Auto-register this phone's SIMs with the panel.
+        // Auto-register this phone's SIMs + device model/Android with the panel.
         try {
-          await registerDevices(list);
+          let info;
+          try { info = SmsGateway.getDeviceInfo(); } catch (e) {}
+          await registerDevices(list, info);
         } catch (e) {
           console.warn('registerDevices failed', e?.message);
         }
