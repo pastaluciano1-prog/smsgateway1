@@ -158,10 +158,16 @@ class SmsGatewayModule : Module() {
       }
     }
 
-    // Start/stop the foreground service that keeps polling alive with screen off.
-    Function("startService") {
+    // Start the native foreground poll loop with the connection config. It runs
+    // independently of the JS/UI, so sending continues when the app is minimized
+    // or the screen is off.
+    Function("startService") { host: String, apiKey: String, interval: Int ->
       val context = appContext.reactContext ?: return@Function false
-      val intent = Intent(context, PollingForegroundService::class.java)
+      val intent = Intent(context, PollingForegroundService::class.java).apply {
+        putExtra("host", host)
+        putExtra("apiKey", apiKey)
+        putExtra("interval", if (interval > 0) interval.toLong() else 5000L)
+      }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         context.startForegroundService(intent)
       } else {
@@ -172,7 +178,29 @@ class SmsGatewayModule : Module() {
 
     Function("stopService") {
       val context = appContext.reactContext ?: return@Function false
+      // Clear saved config so the boot receiver won't restart it after disconnect.
+      context.getSharedPreferences(PollingForegroundService.PREFS, Context.MODE_PRIVATE)
+        .edit().clear().apply()
       context.stopService(Intent(context, PollingForegroundService::class.java))
+      true
+    }
+
+    // Counters maintained by the native service (survive app minimize/close).
+    Function("getCounters") {
+      val context = appContext.reactContext
+        ?: return@Function mapOf("sent" to 0, "failed" to 0, "received" to 0)
+      val p = context.getSharedPreferences(PollingForegroundService.PREFS, Context.MODE_PRIVATE)
+      mapOf(
+        "sent" to p.getInt("count_sent", 0),
+        "failed" to p.getInt("count_failed", 0),
+        "received" to p.getInt("count_received", 0)
+      )
+    }
+
+    Function("resetCounters") {
+      val context = appContext.reactContext ?: return@Function false
+      context.getSharedPreferences(PollingForegroundService.PREFS, Context.MODE_PRIVATE)
+        .edit().putInt("count_sent", 0).putInt("count_failed", 0).putInt("count_received", 0).apply()
       true
     }
 

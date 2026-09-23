@@ -2,7 +2,7 @@
   "expo": {
     "name": "SMS Gateway",
     "slug": "smsgateway-android",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "platforms": [
@@ -10,7 +10,7 @@
     ],
     "android": {
       "package": "com.smsgateway.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4338ca"
@@ -22,7 +22,9 @@
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
         "android.permission.WAKE_LOCK",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.INTERNET"
       ]
     },
     "plugins": [

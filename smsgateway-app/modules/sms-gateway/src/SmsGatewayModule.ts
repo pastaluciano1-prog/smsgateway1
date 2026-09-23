@@ -22,9 +22,11 @@ declare class SmsGatewayModule extends NativeModule<{}> {
   // Resolves after the platform confirms the send; rejects on real failures
   // (no credit, no service, radio off, timeout).
   sendSms(to: string, body: string, subscriptionId: number): Promise<boolean>;
-  // Foreground service that keeps polling alive while the screen is off.
-  startService(): boolean;
+  // Native foreground poll loop (runs with the app minimized / screen off).
+  startService(host: string, apiKey: string, interval: number): boolean;
   stopService(): boolean;
+  getCounters(): { sent: number; failed: number; received: number };
+  resetCounters(): boolean;
   // Battery-optimization exemption for reliable background operation.
   isIgnoringBatteryOptimizations(): boolean;
   requestIgnoreBatteryOptimizations(): boolean;

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, PermissionsAndroid } from 'react-native';
-import { loadConfig, loadCounters, clearConfig, getFlag, setFlag } from './store';
+import { loadConfig, clearConfig, getFlag, setFlag } from './store';
 import SmsGateway from '../modules/sms-gateway/src/SmsGatewayModule';
-import { startPolling, stopPolling } from './poller';
 import { registerDevices } from './api';
 
 export default function HomeScreen({ onDisconnect }) {
@@ -11,9 +10,14 @@ export default function HomeScreen({ onDisconnect }) {
   const [sims, setSims] = useState([]);
   const [batteryOk, setBatteryOk] = useState(true);
 
+  // Counters are now owned by the native service (survive app minimize/close).
+  function refreshCounters() {
+    try { setCounters(SmsGateway.getCounters()); } catch (e) { }
+  }
+
   async function refresh() {
     setConfig(await loadConfig());
-    setCounters(await loadCounters());
+    refreshCounters();
   }
 
   async function loadSims() {
@@ -54,16 +58,17 @@ export default function HomeScreen({ onDisconnect }) {
     } catch (e) { }
   }
 
-  async function setupBackground() {
-    // Keep the poll loop alive with the screen off.
-    try { SmsGateway.startService(); } catch (e) { }
+  async function setupBackground(cfg) {
+    // Start the NATIVE poll loop with the connection config. It keeps running
+    // when the app is minimized or the screen is off.
+    try {
+      if (cfg?.host && cfg?.apiKey) SmsGateway.startService(cfg.host, cfg.apiKey, 5000);
+    } catch (e) { }
     try {
       const ok = SmsGateway.isIgnoringBatteryOptimizations();
       setBatteryOk(ok);
-      // Only auto-prompt for the battery exemption ONCE, ever. Otherwise, if
-      // Android relaunches the app, it would nag on every launch. After the
-      // first ask, the on-screen "Allow background running" card lets the user
-      // enable it whenever they want.
+      // Only auto-prompt for the battery exemption ONCE, ever, so Android
+      // relaunches don't nag. The on-screen card lets the user enable it later.
       if (!ok) {
         const alreadyAsked = await getFlag('asked_battery');
         if (!alreadyAsked) {
@@ -75,12 +80,16 @@ export default function HomeScreen({ onDisconnect }) {
   }
 
   useEffect(() => {
-    refresh();
-    loadSims();
-    setupBackground();
-    // Start polling the server; refresh counters whenever something sends
-    startPolling(5000, refresh);
-    return () => stopPolling();  // stop when leaving the screen
+    (async () => {
+      const cfg = await loadConfig();
+      setConfig(cfg);
+      await loadSims();
+      setupBackground(cfg);
+    })();
+    // Reflect the native counters in the UI every few seconds.
+    refreshCounters();
+    const t = setInterval(refreshCounters, 3000);
+    return () => clearInterval(t);
   }, []);
 
   function maskKey(key) {
