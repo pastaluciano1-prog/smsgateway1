@@ -50,8 +50,14 @@ export async function reportStatus(id, status, error) {
 // every connect/refresh. `sims` is SmsGateway.getSimInfo(); `info` is
 // SmsGateway.getDeviceInfo().
 export async function registerDevices(sims, info) {
-  if (!sims || sims.length === 0) return;
   const { base, headers } = await getBase();
+
+  // If SIM info isn't available yet (phone permission not granted), still
+  // register the phone itself at slot 0 so it shows up in the panel. When SIM
+  // permission is later granted, the real SIM at slot 0 updates this same row.
+  if (!sims || sims.length === 0) {
+    sims = [{ slot: 0, subscriptionId: 0, carrier: '', number: '' }];
+  }
 
   const model = info?.model || '';
   const manufacturer = info?.manufacturer || '';

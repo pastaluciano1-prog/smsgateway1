@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, PermissionsAndroid } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { saveConfig } from './store';
+import SmsGateway from '../modules/sms-gateway/src/SmsGatewayModule';
+import { registerDevices } from './api';
 
 export default function ConnectScreen({ onConnected }) {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanning, setScanning] = useState(false);
     const [host, setHost] = useState('');
     const [apiKey, setApiKey] = useState('');
+    const [connecting, setConnecting] = useState(false);
 
     function handleScan({ data }) {
         setScanning(false);
@@ -27,8 +30,37 @@ export default function ConnectScreen({ onConnected }) {
             Alert.alert('Missing info', 'Both the panel URL and the API key are required.');
             return;
         }
+        setConnecting(true);
         await saveConfig({ host: h.trim(), apiKey: k.trim() });
-        onConnected();
+
+        // Immediately tell the panel "here's my phone" — and verify it's actually
+        // reachable, so a wrong/unreachable URL doesn't fail silently.
+        try {
+            let info;
+            try { info = SmsGateway.getDeviceInfo(); } catch (e) {}
+            let sims = [];
+            try {
+                const g = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
+                    { title: 'Phone permission', message: 'SMS Gateway reads your SIM info to register this phone.', buttonPositive: 'OK' }
+                );
+                if (g === PermissionsAndroid.RESULTS.GRANTED) sims = SmsGateway.getSimInfo();
+            } catch (e) {}
+            await registerDevices(sims, info);
+            setConnecting(false);
+            onConnected();
+        } catch (e) {
+            setConnecting(false);
+            Alert.alert(
+                "Couldn't reach the panel",
+                `Saved your connection, but the panel at ${h.trim()} didn't respond.\n\n` +
+                `Make sure this URL is reachable from THIS phone — not "localhost". Use your computer's network address (e.g. http://192.168.1.50:3001) or a public HTTPS URL.`,
+                [
+                    { text: 'Fix URL', style: 'cancel' },
+                    { text: 'Continue anyway', onPress: onConnected },
+                ]
+            );
+        }
     }
 
     // ---- Scanner ----
@@ -113,8 +145,12 @@ export default function ConnectScreen({ onConnected }) {
                     onChangeText={setApiKey}
                 />
 
-                <TouchableOpacity style={[styles.primaryBtn, { marginTop: 20 }]} onPress={() => save(host, apiKey)}>
-                    <Text style={styles.primaryBtnText}>Connect</Text>
+                <TouchableOpacity
+                    style={[styles.primaryBtn, { marginTop: 20 }, connecting && { opacity: 0.6 }]}
+                    onPress={() => save(host, apiKey)}
+                    disabled={connecting}
+                >
+                    <Text style={styles.primaryBtnText}>{connecting ? 'Connecting…' : 'Connect'}</Text>
                 </TouchableOpacity>
             </View>
 
