@@ -23,7 +23,7 @@ declare class SmsGatewayModule extends NativeModule<{}> {
   // (no credit, no service, radio off, timeout).
   sendSms(to: string, body: string, subscriptionId: number): Promise<boolean>;
   // Native foreground poll loop (runs with the app minimized / screen off).
-  startService(host: string, apiKey: string, interval: number): boolean;
+  startService(host: string, apiKey: string, deviceId: string, interval: number): boolean;
   stopService(): boolean;
   getCounters(): { sent: number; failed: number; received: number };
   resetCounters(): boolean;

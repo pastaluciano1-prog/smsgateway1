@@ -161,11 +161,12 @@ class SmsGatewayModule : Module() {
     // Start the native foreground poll loop with the connection config. It runs
     // independently of the JS/UI, so sending continues when the app is minimized
     // or the screen is off.
-    Function("startService") { host: String, apiKey: String, interval: Int ->
+    Function("startService") { host: String, apiKey: String, deviceId: String, interval: Int ->
       val context = appContext.reactContext ?: return@Function false
       val intent = Intent(context, PollingForegroundService::class.java).apply {
         putExtra("host", host)
         putExtra("apiKey", apiKey)
+        putExtra("deviceId", deviceId)
         putExtra("interval", if (interval > 0) interval.toLong() else 5000L)
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

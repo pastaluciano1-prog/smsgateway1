@@ -37,6 +37,7 @@ class PollingForegroundService : Service() {
 
   private var host = ""
   private var apiKey = ""
+  private var deviceId = ""
   private var intervalMs = 5000L
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -54,11 +55,13 @@ class PollingForegroundService : Service() {
     val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     intent?.getStringExtra("host")?.let { prefs.edit().putString("host", it).apply() }
     intent?.getStringExtra("apiKey")?.let { prefs.edit().putString("apiKey", it).apply() }
+    intent?.getStringExtra("deviceId")?.let { prefs.edit().putString("deviceId", it).apply() }
     val iv = intent?.getLongExtra("interval", 0L) ?: 0L
     if (iv > 0) prefs.edit().putLong("interval", iv).apply()
 
     host = prefs.getString("host", "") ?: ""
     apiKey = prefs.getString("apiKey", "") ?: ""
+    deviceId = prefs.getString("deviceId", "") ?: ""
     intervalMs = prefs.getLong("interval", 5000L)
 
     startForeground(NOTIFICATION_ID, buildNotification())
@@ -178,6 +181,7 @@ class PollingForegroundService : Service() {
       val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         setRequestProperty("Authorization", "Bearer $apiKey")
+        if (deviceId.isNotBlank()) setRequestProperty("X-Device-Id", deviceId)
         connectTimeout = 15000
         readTimeout = 15000
       }

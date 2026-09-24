@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, PermissionsAndroid } from 'react-native';
-import { loadConfig, clearConfig, getFlag, setFlag } from './store';
+import { loadConfig, clearConfig, getFlag, setFlag, getOrCreateDeviceId } from './store';
 import SmsGateway from '../modules/sms-gateway/src/SmsGatewayModule';
 import { registerDevices } from './api';
 
@@ -60,9 +60,13 @@ export default function HomeScreen({ onDisconnect }) {
 
   async function setupBackground(cfg) {
     // Start the NATIVE poll loop with the connection config. It keeps running
-    // when the app is minimized or the screen is off.
+    // when the app is minimized or the screen is off. device_id lets the server
+    // give THIS phone only its own messages when several phones share a key.
     try {
-      if (cfg?.host && cfg?.apiKey) SmsGateway.startService(cfg.host, cfg.apiKey, 5000);
+      if (cfg?.host && cfg?.apiKey) {
+        const deviceId = await getOrCreateDeviceId();
+        SmsGateway.startService(cfg.host, cfg.apiKey, deviceId, 5000);
+      }
     } catch (e) { }
     try {
       const ok = SmsGateway.isIgnoringBatteryOptimizations();

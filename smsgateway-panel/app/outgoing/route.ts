@@ -26,11 +26,17 @@ export async function GET(req: Request) {
     const nowStr = pbDate(now);
     const sinceStr = pbDate(new Date(now.getTime() - 60_000));
 
-    const devices = await pb.collection("devices").getFullList<DeviceRecord>({
+    // When several phones share ONE API key, each sends its device_id so we only
+    // give it its OWN messages (and mark only it as online). Older apps that
+    // don't send it fall back to all devices under the key.
+    const deviceId = req.headers.get("x-device-id")?.trim() || "";
+
+    let devices = await pb.collection("devices").getFullList<DeviceRecord>({
       filter: `api_key = "${apiKey.id}"`,
     });
+    if (deviceId) devices = devices.filter((d) => d.device_id === deviceId);
 
-    // Mark the phone as alive (all SIM records share one physical device).
+    // Mark this phone's SIM record(s) as alive.
     await Promise.allSettled(
       devices.map((d) =>
         pb.collection("devices").update(d.id, { last_seen: nowStr })
