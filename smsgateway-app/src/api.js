@@ -1,4 +1,4 @@
-import { loadConfig } from './store';
+import { loadConfig, getOrCreateDeviceId } from './store';
 
 // Build a clean base URL + auth headers from saved config
 async function getBase() {
@@ -51,6 +51,7 @@ export async function reportStatus(id, status, error) {
 // SmsGateway.getDeviceInfo().
 export async function registerDevices(sims, info) {
   const { base, headers } = await getBase();
+  const deviceId = await getOrCreateDeviceId();
 
   // If SIM info isn't available yet (phone permission not granted), still
   // register the phone itself at slot 0 so it shows up in the panel. When SIM
@@ -72,6 +73,7 @@ export async function registerDevices(sims, info) {
     'Phone';
 
   const devices = sims.map((s) => ({
+    device_id: deviceId,
     sim_slot: s.slot,
     subscription_id: s.subscriptionId,
     carrier: s.carrier || '',

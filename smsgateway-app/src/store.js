@@ -4,7 +4,23 @@ const KEYS = {
   host: 'cfg_host',
   apiKey: 'cfg_apiKey',
   counters: 'cfg_counters',
+  deviceId: 'cfg_deviceId',
 };
+
+// --- Per-installation device ID ---
+// Identifies THIS phone install to the server, independent of which SIMs it
+// has. Without this, two different phones registering under the same API
+// key (same QR code) can't be told apart and end up overwriting each
+// other's device row. Generated once and persisted forever.
+
+export async function getOrCreateDeviceId() {
+  let id = await AsyncStorage.getItem(KEYS.deviceId);
+  if (!id) {
+    id = `dev_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem(KEYS.deviceId, id);
+  }
+  return id;
+}
 
 // --- Generic one-shot flags (e.g. "we already asked for X once") ---
 

@@ -15,6 +15,7 @@ export interface ApiKeyRecord extends RecordModel {
 export interface DeviceRecord extends RecordModel {
   api_key: string;
   name?: string;
+  device_id?: string;
   sim_slot?: number;
   subscription_id?: number;
   carrier?: string;

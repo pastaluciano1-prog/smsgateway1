@@ -100,6 +100,19 @@ export default function KeyCard({
     );
   };
 
+  const onFieldChange = async (
+    d: DeviceRecord,
+    field: "name" | "number",
+    value: string
+  ) => {
+    const trimmed = value.trim();
+    if (trimmed === (d[field] || "")) return;
+    await updateDevice(d.id, { [field]: trimmed });
+    setDevices((prev) =>
+      prev.map((x) => (x.id === d.id ? { ...x, [field]: trimmed } : x))
+    );
+  };
+
   const onDeleteDevice = async (id: string) => {
     if (!confirm("Remove this device? Its messages will also be deleted.")) return;
     await deleteDevice(id);
@@ -211,7 +224,13 @@ export default function KeyCard({
                     className="border-t border-zinc-100 dark:border-zinc-800"
                   >
                     <td className="py-2 pr-3 text-zinc-800 dark:text-zinc-200">
-                      {d.name || "—"}
+                      <input
+                        type="text"
+                        defaultValue={d.name ?? ""}
+                        placeholder="Name"
+                        onBlur={(e) => onFieldChange(d, "name", e.target.value)}
+                        className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:hover:border-zinc-700 dark:focus:bg-zinc-950"
+                      />
                       {d.sim_slot != null && (
                         <span className="ml-1 text-xs text-zinc-400">
                           slot {d.sim_slot}
@@ -228,7 +247,13 @@ export default function KeyCard({
                       {d.carrier || "—"}
                     </td>
                     <td className="py-2 pr-3 text-zinc-600 dark:text-zinc-400">
-                      {d.number || "—"}
+                      <input
+                        type="text"
+                        defaultValue={d.number ?? ""}
+                        placeholder="Number"
+                        onBlur={(e) => onFieldChange(d, "number", e.target.value)}
+                        className="w-28 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:hover:border-zinc-700 dark:focus:bg-zinc-950"
+                      />
                     </td>
                     <td className="py-2 pr-3">
                       <input
