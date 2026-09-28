@@ -9,9 +9,10 @@ WORKDIR /app
 COPY smsgateway-panel/package.json smsgateway-panel/package-lock.json ./
 RUN npm ci
 COPY smsgateway-panel/ ./
-# Browser talks to PocketBase through the panel's /pb proxy (same origin).
-ARG NEXT_PUBLIC_PB_URL=/pb
-ENV NEXT_PUBLIC_PB_URL=$NEXT_PUBLIC_PB_URL
+# The browser ALWAYS talks to PocketBase through the panel's same-origin /pb
+# proxy in this one-container image. Hardcoded (not an ARG) so a stray
+# NEXT_PUBLIC_PB_URL variable on the host can't override it and break login.
+ENV NEXT_PUBLIC_PB_URL=/pb
 RUN npm run build
 
 # ---- runtime: panel + pocketbase in one image ----

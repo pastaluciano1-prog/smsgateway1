@@ -64,4 +64,5 @@ export interface MessageRecord extends RecordModel {
   send_at?: string;
   campaign?: string;
   retries?: number;
+  charged?: boolean;
 }

@@ -70,6 +70,11 @@ export async function GET(req: Request) {
       [];
 
     for (const d of devices) {
+      // If balance tracking is on, don't send from a SIM that can't cover
+      // another message — its queued messages just wait until it's topped up.
+      const cost = d.sms_cost ?? 0;
+      if (cost > 0 && (d.balance ?? 0) < cost) continue;
+
       const rate = d.rate_limit_per_min ?? 0;
       let allowance = MAX_BATCH;
 
